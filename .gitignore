@@ -1,0 +1,24 @@
+# Rust build output
+/target
+
+# Local models — large binaries, never commit
+/models/
+*.gguf
+*.safetensors
+
+# Local user data (writing history, personal dictionary) — private, never commit
+/data/
+*.db
+*.sqlite
+
+# Secrets
+.env
+.env.*
+
+# Learning-mode notes. Recommended: keep them local. Uncomment to ignore.
+# .wise-code/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
