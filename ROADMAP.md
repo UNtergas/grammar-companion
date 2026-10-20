@@ -32,33 +32,102 @@ What would each crate own, and why would the boundary help later milestones?
 
 ---
 
-## M1 — CLI checker (English + French)
+## M1 — CLI checker, in two parts
+
+M1 is split on purpose. **M1a** builds a small checker yourself, so the core ideas are
+yours. **M1b** plugs real engines in behind it for coverage, because full EN and FR
+grammar coverage is years of rule writing.
+
+Reference project: [Harper](https://github.com/automattic/harper) (Rust, Apache-2.0,
+English only). Read it **after** M1a, not before: reading first means copying a design
+without knowing why it is shaped that way.
+
+### M1a — Own mini-checker (from scratch)
 
 **Outcome:** a command-line tool that reads text from a file or stdin, takes a language,
-and prints diagnostics with exact positions and suggestions.
+runs **your own** rules, and prints diagnostics with exact positions and suggestions.
 
 **Rust focus:** `&str` vs `String`, ownership across function boundaries, enums and `match`,
-`Result` and `?`, custom error types, traits for swappable behaviour, unit tests.
+`Result` and `?`, custom error types, traits for swappable behaviour, iterators, unit tests.
+
+**Build yourself:** a tokenizer, a span type, a diagnostic type, a rule abstraction,
+and 3–5 rules. Candidate rules (pick, don't treat as a spec):
+- French typography: no-break space before `; : ! ?`, spacing inside `« »`
+- Repeated word: "the the", "le le"
+- English `a` / `an`
+
+**Decide → ADR-0007 (core types):** what fields does a diagnostic carry, in which unit is a
+position measured, and what does a rule receive and return?
+
+**Done when:**
+- [ ] Tokenizer, span, diagnostic and rule types are your own code; no grammar-checking crate yet
+- [ ] ≥ 3 rules, at least one French typography rule
+- [ ] Fixture corpus started: ≥ 10 EN + ≥ 10 FR cases, including clean sentences (no issue expected)
+- [ ] Fixtures run as `cargo test`
+- [ ] Positions are correct on text containing `é è ç œ`, emoji, and French guillemets `« »`
+- [ ] ADR-0007 written
+- [ ] **Then, not before:** read Harper's equivalents (`Document`, `Token`/`Span`, `Linter`,
+      `ExprLinter`, `FstDictionary`) and write a "mine vs theirs" entry in `docs/til.md`:
+      one thing they did better, one choice of yours you would keep, and what unit their span counts in
+
+**Traps:**
+- Rust strings are UTF-8; slicing a `&str` at a non-character boundary panics.
+- The browser will speak UTF-16 indices later. Byte, `char` and UTF-16 offsets all differ.
+- French uses two no-break spaces (U+00A0 and the narrow U+202F); sources and tools disagree on which goes where.
+- Building a generic rule engine or rule language before three concrete rules exist.
+
+### M1b — Engine adapters
+
+**Outcome:** the same CLI also runs real engines behind your rule abstraction, and merges
+their diagnostics with your own rules' output.
+
+**Rust focus:** depending on external crates, adapting foreign types into yours
+(`From`/`Into`, newtypes), a blocking HTTP call, merging and de-duplicating results,
+optional dependencies with Cargo features.
 
 **Decide → ADR-0002 (engine strategy).** Facts to weigh, not a verdict:
 - `harper-core` is a Rust crate, fast and offline, but **English only** (French not supported as of Oct 2026).
 - LanguageTool covers French, runs as a local Java HTTP server, checked via `/v2/check`.
 - An LLM-only checker is slow, non-deterministic and hard to test.
 
-Also decide: what fields does a diagnostic carry, and in which unit is a position measured?
+Also decide: when two sources flag the same span, which wins? What happens when an engine is unavailable?
 
 **Done when:**
-- [ ] Fixture corpus exists: ≥ 20 EN + ≥ 20 FR cases, including clean sentences (no issue expected)
-- [ ] Fixtures run as `cargo test`
-- [ ] Positions are correct on text containing `é è ç œ`, emoji, and French guillemets `« »`
-- [ ] False-positive count on clean sentences is measured and written down
+- [ ] Fixture corpus grown to ≥ 20 EN + ≥ 20 FR cases
+- [ ] Engine positions converted into your unit; the `é è ç œ` / emoji / `« »` fixtures still pass
+- [ ] False-positive count on clean sentences measured and written down, per source (yours and each engine)
+- [ ] With an engine stopped, the CLI still runs your own rules and reports that engine as unavailable, without panicking
 - [ ] ADR-0002 written
 
 **Traps:**
-- Rust strings are UTF-8; slicing a `&str` at a non-character boundary panics.
-- The browser will speak UTF-16 indices later. Byte, `char` and UTF-16 offsets all differ.
-- French typography puts a (narrow) no-break space before `; : ! ?` — engines disagree on it.
+- Each engine reports positions in its own unit. Check each one; don't assume it matches yours.
 - An external engine call is I/O. Think about where it sits before M2 makes everything async.
+- `harper-core` releases often. Pin the version and upgrade on purpose.
+- LanguageTool is a separate Java process: startup time and memory are part of the cost.
+
+---
+
+## S1 — Side quest: one upstream Harper contribution (after M1b)
+
+**Outcome:** one merged pull request in [automattic/harper](https://github.com/automattic/harper).
+
+**Why:** review from maintainers on real Rust, in a mature codebase, is the strongest
+feedback available. A merged PR is also public evidence of Rust work.
+
+**Path:**
+1. Read their `CONTRIBUTING.md` and contributor docs, including the policy on AI-assisted contributions.
+2. Find a false positive or false negative from your M1b fixtures. That's your issue: open or claim it, and ask whether a fix is wanted.
+3. Start small: a phrase correction or a Weir rule (their rule language, no Rust), then a Rust `ExprLinter`.
+   Guide: [Author a rule](https://writewithharper.com/docs/contributors/author-a-rule).
+4. Open a draft PR early, as their docs recommend.
+
+**Done when:**
+- [ ] Issue opened or claimed, with maintainer interest
+- [ ] PR opened, one rule only
+- [ ] Review feedback addressed
+- [ ] `docs/til.md` entry: what the review taught you
+
+**Traps:** a rule nobody asked for; a PR that grows past one rule; Claude writing the PR code (you write it).
 
 ---
 
@@ -105,6 +174,9 @@ when a check fires while you type.
 - [ ] Accept/ignore events reach the core (needed for M5)
 
 **Traps:** Manifest V3 service workers stop when idle; Firefox native messaging setup differs from Chrome's.
+
+**Study after yours works:** Harper ships its own Chrome/Firefox extension. Compare how it finds
+editable fields and maps positions back to the page.
 
 ---
 

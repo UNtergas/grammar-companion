@@ -50,7 +50,8 @@ Nothing verified yet. No Cargo project exists.
 
 ## Unknowns
 - Crate layout (ADR-0001)
-- Engine strategy for EN and FR; diagnostic shape; position unit (ADR-0002)
+- Diagnostic shape; position unit; rule abstraction (ADR-0007, M1a)
+- Engine strategy for EN and FR; overlap merging; engine-down behaviour (ADR-0002, M1b)
 - Browser ↔ core transport and its security model (ADR-0003)
 - Model runtime and model choice (ADR-0004)
 - Clarity detection, ambiguity handling, meaning-preservation check (ADR-0006)
